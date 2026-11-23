@@ -1,0 +1,10 @@
+# Versions testées avec Python 3.13 (Windows 11).
+# Remarque : mediapipe installe déjà « opencv-contrib-python » (qui fournit cv2).
+# N'installez PAS « opencv-python » en plus : les deux paquets se marchent dessus.
+mediapipe==1.1.0
+opencv-contrib-python==5.0.0.93
+numpy==2.5.4
+websockets==17.2
+pyserial==3.5
+PyYAML==6.0.3
+pytest==9.1.1

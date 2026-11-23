@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Main robotique — simulation</title>
+  <style>
+    :root {
+      --bg: #1d2127;
+      --text: #e9e6df;
+      --muted: #9aa0a8;
+      --ok: #4cc77a;
+      --ko: #e0574f;
+      --warn: #e2b04a;
+    }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      font: 14px/1.4 system-ui, "Segoe UI", sans-serif; overflow: hidden; }
+    #scene { position: fixed; inset: 0; }
+    /* Ligne d'état discrète (connexion + détection), sans panneau. */
+    #status { position: fixed; top: 12px; left: 16px; display: flex; gap: 16px;
+      color: var(--muted); font-size: 12px; pointer-events: none; }
+    .status { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ko); flex: none; }
+    .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
+    #help { position: fixed; bottom: 12px; left: 16px; color: var(--muted); font-size: 12px; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="scene"></div>
+  <div id="status">
+    <div class="status"><span id="ws-dot" class="dot"></span><span id="ws-text">Connexion…</span></div>
+    <div class="status"><span id="hand-dot" class="dot"></span><span id="hand-text">Main : —</span></div>
+  </div>
+  <div id="help">Glisser : tourner · Molette : zoom · Clic droit : déplacer</div>
+  <script type="module" src="hand.js"></script>
+</body>
+</html>
