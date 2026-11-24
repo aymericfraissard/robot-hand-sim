@@ -11,18 +11,17 @@ class HandState:
     """État de la main envoyé aux sorties à chaque image.
 
     Ordre des doigts : pouce, index, majeur, annulaire, auriculaire.
-    Ordre du poignet : rotation, inclinaison.
     """
 
     percents: tuple[float, ...]       # Flexion logique 0 % (tendu) → 100 % (plié)
     finger_servos: tuple[int, ...]    # Angles servo des doigts 0–180° (min/max et inversion appliqués)
     hand_detected: bool
-    wrist_degrees: tuple[float, float] = (0.0, 0.0)  # Angles logiques du poignet (degrés, 0 = neutre)
-    wrist_servos: tuple[int, ...] = ()               # () si poignet désactivé, sinon (rotation, inclinaison)
+    wrist_deviation: float = 0.0      # Inclinaison logique du poignet (degrés, 0 = neutre, + = vers le pouce)
+    wrist_servos: tuple[int, ...] = ()  # () si poignet désactivé, sinon (inclinaison,)
 
     @property
     def servo_frame(self) -> tuple[int, ...]:
-        """Tous les angles servo dans l'ordre de la trame série (5 ou 7 valeurs)."""
+        """Tous les angles servo dans l'ordre de la trame série (5 ou 6 valeurs)."""
         return self.finger_servos + self.wrist_servos
 
 

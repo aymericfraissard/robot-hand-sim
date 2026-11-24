@@ -19,19 +19,12 @@ def create_backend(mode: str, config: dict[str, Any], web_dir: Path, open_browse
         from src.backends.sim_backend import SimBackend
 
         sim = config["sim"]
-        wrist = config.get("wrist", {})
-        wrist_ranges = (
-            [list(wrist["rotation"]["range_deg"]), list(wrist["deviation"]["range_deg"])]
-            if wrist.get("enabled", False)
-            else None
-        )
         return SimBackend(
             web_dir=web_dir,
             host=sim["host"],
             http_port=int(sim["http_port"]),
             ws_port=int(sim["ws_port"]),
             open_browser=open_browser and bool(sim.get("open_browser", True)),
-            wrist_ranges=wrist_ranges,
         )
 
     def make_serial() -> Backend:

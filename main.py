@@ -28,9 +28,7 @@ from src.backends import MODES, Backend, HandState, create_backend
 from src.calibration import Calibration, CalibrationProcedure
 from src.finger_angles import FINGER_NAMES, NUM_FINGERS, percent_to_servo, raw_flexions, raw_to_percent
 from src.smoothing import ExponentialSmoother
-from src.wrist_angles import HandednessFilter, WristAxisConfig, hand_frame, wrist_angles
-
-WRIST_NAMES = ("rotation", "inclin.")
+from src.wrist_angles import WristAxisConfig, hand_frame, wrist_deviation
 
 ROOT = Path(__file__).resolve().parent
 WINDOW = "Robot Hand - webcam"
@@ -73,10 +71,9 @@ def demo_percents(t: float, speed: float) -> NDArray[np.float64]:
     return np.full(NUM_FINGERS, 50.0 - 50.0 * math.cos((cycle - 8.0) * math.pi / 2.0))
 
 
-def demo_wrist(t: float, speed: float) -> NDArray[np.float64]:
-    """Poignet en démo : rotation lente ±60°, inclinaison ±20°."""
-    t *= speed
-    return np.array([60.0 * math.sin(0.5 * t), 20.0 * math.sin(0.9 * t + 1.0)])
+def demo_wrist(t: float, speed: float) -> float:
+    """Inclinaison du poignet en démo : ±20°."""
+    return 20.0 * math.sin(0.9 * t * speed + 1.0)
 
 
 # -------------------------------------------------------------- Affichage
@@ -90,14 +87,14 @@ def draw_overlay(
     calib: Calibration,
     message: str,
     demo: bool,
-    wrist_deg: NDArray[np.float64] | None = None,
+    wrist_dev: float = 0.0,
     wrist_servos: tuple[int, ...] = (),
-    wrist_axes: list[WristAxisConfig] | None = None,
+    wrist_axis: WristAxisConfig | None = None,
 ) -> None:
     """Panneau d'informations : angles par doigt et du poignet, FPS, état, aide."""
     h, w = frame.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
-    rows = NUM_FINGERS + (len(WRIST_NAMES) if wrist_axes else 0)
+    rows = NUM_FINGERS + (1 if wrist_axis else 0)
     status_y = 52 + rows * 24 + 2
     # Fond semi-transparent du panneau.
     panel = frame[0 : status_y + 12, 0:300]
@@ -115,23 +112,19 @@ def draw_overlay(
         cv2.rectangle(frame, (x0, y - 10), (x0 + int((x1 - x0) * percents[i] / 100.0), y), BEIGE, -1)
         cv2.putText(frame, f"{servos[i]:3.0f} deg", (220, y), font, 0.5, WHITE, 1, cv2.LINE_AA)
 
-    # Poignet : jauge centrée sur la position neutre.
-    if wrist_axes and wrist_deg is not None:
-        for j, (name, axis) in enumerate(zip(WRIST_NAMES, wrist_axes)):
-            y = 52 + (NUM_FINGERS + j) * 24
-            cv2.putText(frame, name, (10, y), font, 0.5, WHITE if axis.enabled else GREY, 1, cv2.LINE_AA)
-            x0, x1 = 110, 210
-            xc = (x0 + x1) // 2
-            cv2.rectangle(frame, (x0, y - 10), (x1, y), GREY, 1)
-            cv2.line(frame, (xc, y - 12), (xc, y + 2), GREY, 1)
-            if axis.enabled:
-                lo, hi = axis.range_deg
-                v = axis.clamp(float(wrist_deg[j]))
-                tip = xc + int((x1 - xc) * v / hi) if v >= 0 else xc - int((xc - x0) * v / lo)
-                cv2.rectangle(frame, (min(xc, tip), y - 10), (max(xc, tip), y), BEIGE, -1)
-                cv2.putText(frame, f"{wrist_servos[j]:3d} deg", (220, y), font, 0.5, WHITE, 1, cv2.LINE_AA)
-            else:
-                cv2.putText(frame, "off", (220, y), font, 0.5, GREY, 1, cv2.LINE_AA)
+    # Inclinaison du poignet : jauge centrée sur la position neutre.
+    if wrist_axis is not None and wrist_servos:
+        y = 52 + NUM_FINGERS * 24
+        cv2.putText(frame, "inclin.", (10, y), font, 0.5, WHITE, 1, cv2.LINE_AA)
+        x0, x1 = 110, 210
+        xc = (x0 + x1) // 2
+        cv2.rectangle(frame, (x0, y - 10), (x1, y), GREY, 1)
+        cv2.line(frame, (xc, y - 12), (xc, y + 2), GREY, 1)
+        lo, hi = wrist_axis.range_deg
+        v = wrist_axis.clamp(wrist_dev)
+        tip = xc + int((x1 - xc) * v / hi) if v >= 0 else xc - int((xc - x0) * v / lo)
+        cv2.rectangle(frame, (min(xc, tip), y - 10), (max(xc, tip), y), BEIGE, -1)
+        cv2.putText(frame, f"{wrist_servos[0]:3d} deg", (220, y), font, 0.5, WHITE, 1, cv2.LINE_AA)
 
     cv2.putText(frame, backend.status(), (10, status_y), font, 0.45, GREY, 1, cv2.LINE_AA)
     if calib.is_default and not demo:
@@ -154,16 +147,11 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
     return_alpha = float(angles_cfg["return_alpha"])
     mirror = bool(cam_cfg["mirror"])
 
-    # Poignet (rotation, inclinaison).
+    # Poignet (inclinaison seule).
     wrist_cfg = cfg.get("wrist", {})
     wrist_on = bool(wrist_cfg.get("enabled", False))
-    wrist_axes = (
-        [WristAxisConfig.from_dict(wrist_cfg["rotation"]), WristAxisConfig.from_dict(wrist_cfg["deviation"])]
-        if wrist_on
-        else None
-    )
-    wrist_smoother = ExponentialSmoother(float(wrist_cfg.get("smoothing_alpha", 0.35)), 2)
-    handedness = HandednessFilter()
+    wrist_axis = WristAxisConfig.from_dict(wrist_cfg["deviation"]) if wrist_on else None
+    wrist_smoother = ExponentialSmoother(float(wrist_cfg.get("smoothing_alpha", 0.35)), 1)
     demo_speed = float(cfg.get("demo", {}).get("speed", 1.0))
 
     # Source d'images : webcam + MediaPipe, ou démo.
@@ -190,8 +178,8 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
     log.info("Mode « %s »%s. Touches : q quitter, c calibrer, m miroir.", mode, " (démo)" if args.demo else "")
     log.info(
         "Poignet %s : trame série à %d valeurs.",
-        "activé (rotation, inclinaison)" if wrist_on else "désactivé",
-        NUM_FINGERS + (2 if wrist_on else 0),
+        "activé (inclinaison)" if wrist_on else "désactivé",
+        NUM_FINGERS + (1 if wrist_on else 0),
     )
 
     cv2.namedWindow(WINDOW, cv2.WINDOW_AUTOSIZE)
@@ -204,8 +192,8 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
             # --- 1. Image + détection
             detected = False
             raw: NDArray[np.float64] | None = None
-            wrist_sample: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None
-            wrist_target: NDArray[np.float64] | None = None
+            wrist_sample: NDArray[np.float64] | None = None
+            wrist_target: float | None = None
             if camera is not None and tracker is not None:
                 frame = camera.read()
                 if frame is None:
@@ -217,12 +205,10 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
                 if detection is not None:
                     detected = True
                     raw = raw_flexions(detection.world_landmarks)
-                    # Poignet : repère de la main comparé à la pose neutre calibrée.
-                    h_sign = handedness.update(detection.handedness)
-                    hf = hand_frame(detection.world_landmarks, h_sign)
-                    wrist_sample = (hf.long, hf.normal)
-                    rot, dev = wrist_angles(hf, calibration.wrist_long, calibration.wrist_normal, h_sign)
-                    wrist_target = np.array([rot, dev])
+                    # Poignet : axe de la main comparé à la pose neutre calibrée.
+                    hf = hand_frame(detection.world_landmarks)
+                    wrist_sample = hf.long
+                    wrist_target = wrist_deviation(hf, calibration.wrist_long)
                     draw_hand(frame, detection)
                 target = raw_to_percent(raw, calibration.open_raw, calibration.closed_raw) if raw is not None else None
             else:
@@ -248,17 +234,15 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
                 percents = smoother.update(np.zeros(NUM_FINGERS), alpha=return_alpha)
             servos = percent_to_servo(percents, angles_cfg["min_angles"], angles_cfg["max_angles"], angles_cfg["invert"])
 
-            # Poignet : angles bornés à la plage AVANT lissage (évite qu'un saut
-            # ±180° de la rotation ne traverse toute la plage), retour au neutre sans main.
-            wrist_deg = np.zeros(2)
+            # Poignet : angle borné à la plage avant lissage, retour au neutre sans main.
+            wrist_dev = 0.0
             wrist_servos: tuple[int, ...] = ()
-            if wrist_axes is not None:
+            if wrist_axis is not None:
                 if wrist_target is not None:
-                    clamped = np.array([ax.clamp(float(v)) for ax, v in zip(wrist_axes, wrist_target)])
-                    wrist_deg = wrist_smoother.update(clamped)
+                    wrist_dev = float(wrist_smoother.update(np.array([wrist_axis.clamp(wrist_target)]))[0])
                 else:
-                    wrist_deg = wrist_smoother.update(np.zeros(2), alpha=return_alpha)
-                wrist_servos = tuple(ax.to_servo(float(v)) for ax, v in zip(wrist_axes, wrist_deg))
+                    wrist_dev = float(wrist_smoother.update(np.zeros(1), alpha=return_alpha)[0])
+                wrist_servos = (wrist_axis.to_servo(wrist_dev),)
 
             # --- 4. Envoi aux sorties
             backend.send(
@@ -266,7 +250,7 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
                     percents=tuple(float(p) for p in percents),
                     finger_servos=tuple(int(round(a)) for a in servos),
                     hand_detected=detected,
-                    wrist_degrees=(float(wrist_deg[0]), float(wrist_deg[1])),
+                    wrist_deviation=wrist_dev,
                     wrist_servos=wrist_servos,
                 )
             )
@@ -279,7 +263,7 @@ def run(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
             shown = procedure.message if procedure.active else (message if now < message_until else "")
             draw_overlay(
                 frame, percents, servos, detected, fps, backend, calibration, shown, args.demo,
-                wrist_deg, wrist_servos, wrist_axes,
+                wrist_dev, wrist_servos, wrist_axis,
             )
             cv2.imshow(WINDOW, frame)
 

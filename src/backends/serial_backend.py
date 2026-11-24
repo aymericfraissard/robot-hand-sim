@@ -2,9 +2,9 @@
 
 Trame texte (une ligne par envoi), angles entiers 0–180 :
     $a0,a1,a2,a3,a4\n          doigts seuls (poignet désactivé)
-    $a0,a1,a2,a3,a4,a5,a6\n    avec le poignet
+    $a0,a1,a2,a3,a4,a5\n       avec le poignet
   a0–a4 : pouce, index, majeur, annulaire, auriculaire ;
-  a5 : rotation du poignet, a6 : inclinaison du poignet.
+  a5 : inclinaison du poignet.
 
 Si le port est absent ou se déconnecte, on réessaie périodiquement sans
 jamais bloquer la boucle vidéo.

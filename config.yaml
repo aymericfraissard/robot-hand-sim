@@ -39,21 +39,14 @@ angles:
   invert: [false, false, false, false, false]
 
 wrist:
-  # Poignet : rotation (pronation/supination) et inclinaison latérale.
-  # Mesurés par rapport à la pose neutre enregistrée par la calibration (touche c),
+  # Poignet : inclinaison latérale (main penchée vers le pouce ou l'auriculaire).
+  # Mesurée par rapport à la pose neutre enregistrée par la calibration (touche c),
   # en supposant que l'avant-bras reste à peu près immobile (coude posé).
-  # enabled: false → trame série à 5 valeurs (doigts seuls) ; true → 7 valeurs.
+  # enabled: false → trame série à 5 valeurs (doigts seuls) ; true → 6 valeurs.
   enabled: true
   smoothing_alpha: 0.35
-  rotation:             # Rotation autour de l'avant-bras ; + = paume qui tourne vers le pouce
-    enabled: true       # false → le servo reste en position neutre
-    range_deg: [-90, 90]  # Angle mesuré qui correspond à min_angle / max_angle
-    min_angle: 0
-    max_angle: 180
-    invert: false
   deviation:            # Inclinaison latérale ; + = main penchée vers le pouce
-    enabled: true
-    range_deg: [-30, 30]
+    range_deg: [-30, 30]  # Angle mesuré qui correspond à min_angle / max_angle
     min_angle: 45
     max_angle: 135
     invert: false

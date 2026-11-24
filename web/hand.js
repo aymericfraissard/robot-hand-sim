@@ -61,7 +61,7 @@ function shadowed(mesh) {
 // Plier un doigt = rotation positive autour de X (le bout part vers +Z).
 // Le modèle est construit en main gauche (pouce en +X) puis retourné en
 // miroir : on obtient une main DROITE, comme votre main droite vue en miroir
-// dans la fenêtre webcam. Les rotations restent exprimées « vers le pouce ».
+// dans la fenêtre webcam. L'inclinaison reste exprimée « vers le pouce ».
 const hand = new THREE.Group();
 hand.scale.x = -1;
 scene.add(hand);
@@ -72,12 +72,10 @@ forearm.position.y = -2.5;
 forearm.scale.z = 0.65;
 hand.add(forearm);
 
-// Poignet : rotation autour de l'avant-bras (axe Y), puis inclinaison (axe Z,
-// articulation au sommet de l'avant-bras). La paume est accrochée à l'inclinaison.
-const wristRoll = new THREE.Group();
-hand.add(wristRoll);
+// Poignet : inclinaison latérale (axe Z, articulation au sommet de l'avant-bras).
+// La paume est accrochée à l'inclinaison.
 const wristDev = new THREE.Group();
-wristRoll.add(wristDev);
+hand.add(wristDev);
 const wristPin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 3.2, 16), pinMat));
 wristPin.rotation.x = Math.PI / 2;  // axe d'inclinaison, perpendiculaire à la paume
 wristDev.add(wristPin);
@@ -88,9 +86,8 @@ const palm = shadowed(new THREE.Mesh(new RoundedBoxGeometry(palmW, palmH, palmD,
 palm.position.y = palmH / 2 + 0.4;
 wristDev.add(palm);
 
-/** Pose le poignet : rotation et inclinaison en degrés, positives vers le pouce. */
-function setWrist(rotationDeg, deviationDeg) {
-  wristRoll.rotation.y = rotationDeg * DEG;    // la paume (+Z) tourne vers le pouce (+X)
+/** Pose le poignet : inclinaison en degrés, positive vers le pouce. */
+function setWrist(deviationDeg) {
   wristDev.rotation.z = -deviationDeg * DEG;   // l'axe de la main (+Y) penche vers le pouce
 }
 
@@ -188,8 +185,8 @@ const handDot = document.getElementById("hand-dot"), handText = document.getElem
 // ---------------------------------------------------------- WebSocket
 const target = [0, 0, 0, 0, 0];   // flexion reçue (0–180)
 const current = [0, 0, 0, 0, 0];  // flexion affichée (interpolée)
-const wristTarget = [0, 0];       // rotation, inclinaison reçues (degrés)
-const wristCurrent = [0, 0];
+let wristTarget = 0;              // inclinaison reçue (degrés)
+let wristCurrent = 0;
 const wsPort = new URLSearchParams(location.search).get("ws") || "8765";
 const wsUrl = `ws://${location.hostname || "127.0.0.1"}:${wsPort}`;
 
@@ -204,10 +201,8 @@ function connect() {
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     msg.flex.forEach((v, i) => { target[i] = v; });
-    // Poignet (absent ou désactivé → reste en position neutre).
-    const wristOn = Array.isArray(msg.wrist_servo) && Array.isArray(msg.wrist);
-    msg.wrist?.forEach((v, i) => { wristTarget[i] = wristOn ? v : 0; });
-    if (!wristOn) wristTarget[0] = wristTarget[1] = 0;
+    // Inclinaison du poignet (absente ou désactivée → 0, position neutre).
+    wristTarget = typeof msg.deviation === "number" ? msg.deviation : 0;
     handDot.className = msg.hand ? "dot ok" : "dot warn";
     handText.textContent = msg.hand ? "Main détectée" : "Aucune main (retour main ouverte)";
   };
@@ -225,8 +220,8 @@ function animate() {
     current[i] += (target[i] - current[i]) * k;
     fingers[i](current[i]);
   }
-  for (let i = 0; i < 2; i++) wristCurrent[i] += (wristTarget[i] - wristCurrent[i]) * k;
-  setWrist(wristCurrent[0], wristCurrent[1]);
+  wristCurrent += (wristTarget - wristCurrent) * k;
+  setWrist(wristCurrent);
   controls.update();
   renderer.render(scene, camera);
 }
@@ -239,6 +234,6 @@ window.addEventListener("resize", () => {
 });
 
 // Accès depuis la console du navigateur pour tester :
-//   setFlex([0, 180, 90, 0, 0])   setWristTarget(45, -20)
+//   setFlex([0, 180, 90, 0, 0])   setWristTarget(-20)
 window.setFlex = (arr) => arr.forEach((v, i) => { target[i] = v; });
-window.setWristTarget = (rot, dev) => { wristTarget[0] = rot; wristTarget[1] = dev; };
+window.setWristTarget = (dev) => { wristTarget = dev; };

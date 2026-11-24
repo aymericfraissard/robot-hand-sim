@@ -4,14 +4,14 @@
  * Reçoit depuis le PC (main.py --mode serial), à 115200 bauds, des trames :
  *
  *     $a0,a1,a2,a3,a4\n          doigts seuls (wrist.enabled: false)
- *     $a0,a1,a2,a3,a4,a5,a6\n    doigts + poignet (wrist.enabled: true)
+ *     $a0,a1,a2,a3,a4,a5\n       doigts + poignet (wrist.enabled: true)
  *
- * Ordre : pouce, index, majeur, annulaire, auriculaire, rotation du poignet,
- * inclinaison du poignet. Angles entiers 0–180. Avec une trame à 5 valeurs,
- * les servos du poignet restent en position neutre.
+ * Ordre : pouce, index, majeur, annulaire, auriculaire, inclinaison du
+ * poignet. Angles entiers 0–180. Avec une trame à 5 valeurs, le servo du
+ * poignet reste en position neutre.
  *
  * Sécurités :
- *  - trame validée (début '$', 5 ou 7 entiers 0–180, longueur bornée) ;
+ *  - trame validée (début '$', 5 ou 6 entiers 0–180, longueur bornée) ;
  *  - limitation de vitesse : chaque servo se déplace d'au plus
  *    MAX_SPEED_DEG_PER_S degrés par seconde (protège la mécanique et les fils) ;
  *  - timeout : sans trame valide pendant TIMEOUT_MS, la main revient
@@ -29,30 +29,30 @@
 
 // ----------------------------------------------------------- Réglages
 const uint8_t NUM_FINGERS = 5;
-const uint8_t NUM_SERVOS = 7;   // 5 doigts + rotation + inclinaison du poignet
+const uint8_t NUM_SERVOS = 6;   // 5 doigts + inclinaison du poignet
 
 // Broches des servos : pouce, index, majeur, annulaire, auriculaire,
-// rotation du poignet, inclinaison du poignet. (Servo.h accepte n'importe
-// quelle broche numérique.) Sans poignet, laissez simplement D11/D12 libres.
-const uint8_t SERVO_PINS[NUM_SERVOS] = {3, 5, 6, 9, 10, 11, 12};
+// inclinaison du poignet. (Servo.h accepte n'importe quelle broche
+// numérique.) Sans poignet, laissez simplement D11 libre.
+const uint8_t SERVO_PINS[NUM_SERVOS] = {3, 5, 6, 9, 10, 11};
 
 // Position de repos de chaque servo, utilisée au démarrage et en cas de timeout.
 //  - doigts : angle « main ouverte » = 0 % dans config.yaml, c'est-à-dire
 //    min_angles (ou max_angles si le doigt est inversé) ;
 //  - poignet : position neutre = milieu de [min_angle, max_angle] de
-//    wrist.rotation / wrist.deviation (90 avec les réglages par défaut).
-const uint8_t OPEN_ANGLES[NUM_SERVOS] = {0, 0, 0, 0, 0, 90, 90};
+//    wrist.deviation (90 avec les réglages par défaut).
+const uint8_t OPEN_ANGLES[NUM_SERVOS] = {0, 0, 0, 0, 0, 90};
 
 // Bornes de sécurité mécanique par servo (en plus de celles du PC).
 // Inclinaison : la course d'un vrai poignet est faible, on la borne à 45–135°.
-const uint8_t SAFE_MIN[NUM_SERVOS] = {0, 0, 0, 0, 0, 0, 45};
-const uint8_t SAFE_MAX[NUM_SERVOS] = {180, 180, 180, 180, 180, 180, 135};
+const uint8_t SAFE_MIN[NUM_SERVOS] = {0, 0, 0, 0, 0, 45};
+const uint8_t SAFE_MAX[NUM_SERVOS] = {180, 180, 180, 180, 180, 135};
 
 const unsigned long BAUD_RATE = 115200;
 const unsigned long TIMEOUT_MS = 1000;        // Main ouverte si plus de trame pendant 1 s
 const float MAX_SPEED_DEG_PER_S = 400.0;      // Vitesse max d'un servo
 const unsigned long UPDATE_PERIOD_MS = 10;    // Période de mise à jour des servos (100 Hz)
-const uint8_t LINE_MAX = 40;                  // "$180,180,180,180,180,180,180" = 28 caractères
+const uint8_t LINE_MAX = 40;                  // "$180,180,180,180,180,180" = 24 caractères
 
 // ------------------------------------------------------------- État
 Servo servos[NUM_SERVOS];
@@ -110,7 +110,7 @@ void readSerial() {
         uint8_t angles[NUM_SERVOS];
         uint8_t count = parseFrame(lineBuf, angles);
         if (count > 0) {
-          // Trame à 5 valeurs : les servos du poignet gardent leur consigne.
+          // Trame à 5 valeurs : le servo du poignet garde sa consigne.
           for (uint8_t i = 0; i < count; i++) {
             targetAngle[i] = constrain(angles[i], SAFE_MIN[i], SAFE_MAX[i]);
           }
@@ -184,7 +184,7 @@ void loop() {
  *   #include <Wire.h>
  *   #include <Adafruit_PWMServoDriver.h>
  *   Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
- *   const uint8_t PCA_CHANNELS[NUM_SERVOS] = {0, 1, 2, 3, 4, 5, 6};
+ *   const uint8_t PCA_CHANNELS[NUM_SERVOS] = {0, 1, 2, 3, 4, 5};
  *   // Largeurs d'impulsion (µs) pour 0° et 180° : à ajuster selon vos servos.
  *   const uint16_t PULSE_MIN_US = 500, PULSE_MAX_US = 2400;
  *

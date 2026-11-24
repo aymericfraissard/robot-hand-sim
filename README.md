@@ -1,8 +1,8 @@
 # robot-hand-sim — Main robotique pilotée par webcam
 
 Votre main est filmée par la webcam et suivie en temps réel par **MediaPipe**. Une **main robotique 3D**
-(dans le navigateur) reproduit les mouvements de vos 5 doigts et de votre **poignet** (rotation et
-inclinaison). Le même code pilote plus tard une **vraie main** (5 à 7 servos + Arduino) : il suffit de
+(dans le navigateur) reproduit les mouvements de vos 5 doigts et l'**inclinaison de votre poignet**.
+Le même code pilote plus tard une **vraie main** (5 ou 6 servos + Arduino) : il suffit de
 changer `mode` dans `config.yaml`.
 
 ```
@@ -15,7 +15,7 @@ Webcam ─► OpenCV ─► MediaPipe HandLandmarker ─► angles des doigts �
 2. [Lancement](#2-lancement)
 3. [Raccourcis clavier](#3-raccourcis-clavier)
 4. [Calibration](#4-calibration)
-5. [Poignet](#5-poignet-rotation-et-inclinaison)
+5. [Poignet](#5-poignet-inclinaison)
 6. [Configuration](#6-configuration-configyaml)
 7. [Passer au vrai matériel](#7-passer-au-vrai-matériel)
 8. [Dépannage](#8-dépannage)
@@ -96,8 +96,8 @@ différente : calibrer améliore beaucoup la précision, surtout pour le pouce.
 1. Placez votre main bien visible devant la webcam, à 40–70 cm, **coude posé** sur la table.
 2. Appuyez sur **`c`**.
 3. **« OUVREZ la main, doigts en haut »** : écartez les doigts, main bien tendue, **paume face à la
-   caméra et doigts vers le haut**. Cette pose sert aussi de **position neutre du poignet** (rotation
-   et inclinaison à 0). Après 3 s, la capture dure 1 s (ne bougez plus).
+   caméra et doigts vers le haut**. Cette pose sert aussi de **position neutre du poignet** (inclinaison
+   à 0). Après 3 s, la capture dure 1 s (ne bougez plus).
 4. **« FERMEZ le poing »** : poing fermé, pouce replié sur les doigts. Même principe.
 5. Le message « Calibration enregistrée ! » s'affiche.
 
@@ -105,17 +105,19 @@ La calibration est sauvegardée dans `calibration.json` et **rechargée à chaqu
 doigt n'a pas assez bougé entre les deux poses, la calibration est refusée et l'ancienne est conservée.
 Pour revenir aux valeurs par défaut, supprimez `calibration.json`.
 
-## 5. Poignet (rotation et inclinaison)
+## 5. Poignet (inclinaison)
 
-Deux mouvements du poignet sont reproduits :
+Un seul mouvement du poignet est reproduit : l'**inclinaison** (déviation radiale / cubitale). Il
+s'agit de pencher la main vers le pouce ou vers l'auriculaire, paume face à la caméra. L'angle est
+positif vers le pouce.
 
-| Mouvement | Geste | Signe |
-|---|---|---|
-| **Rotation** (pronation / supination) | tourner la main comme une poignée de porte | + quand la paume tourne vers le pouce |
-| **Inclinaison** (déviation radiale / cubitale) | pencher la main vers le pouce ou vers l'auriculaire, paume face à la caméra | + vers le pouce |
+Ne sont **pas** reproduites :
+- la **rotation** de la main sur elle-même (tourner comme une poignée de porte), retirée car trop
+  instable avec une seule webcam ;
+- la **flexion** (main vers le haut ou vers le bas), qui se lit dans la profondeur, que la webcam
+  estime mal.
 
-La flexion du poignet (main vers le haut ou vers le bas) n'est **pas** reproduite : elle se lit dans
-la profondeur, que la webcam estime mal.
+Tourner la main sur elle-même ne fait pas bouger l'inclinaison.
 
 **Comment c'est mesuré.** MediaPipe ne voit que la main, pas l'avant-bras. On compare donc
 l'orientation de la main à la **pose neutre** enregistrée pendant la calibration (main ouverte, doigts
@@ -124,15 +126,11 @@ sur la table. Sans calibration, la pose neutre par défaut est « paume face à 
 haut ».
 
 **Bon à savoir**
-- Les angles sont limités à `range_deg` (±90° pour la rotation, ±30° pour l'inclinaison par défaut).
-- Quand la main est vue de profil (rotation proche de ±90°), les doigts se cachent les uns derrière
-  les autres : la mesure des **doigts** devient moins fiable. C'est une limite de la webcam.
+- L'angle est limité à `range_deg` (±30° par défaut).
 - Quand la main disparaît, le poignet revient doucement en position neutre.
 - La main 3D est une **main droite**. Elle s'utilise naturellement avec votre main droite, vue en
-  miroir. Avec la main gauche, les sens de rotation et d'inclinaison restent anatomiques (« vers le
-  pouce »).
-- Pour désactiver un axe : `enabled: false` sur l'axe (son servo reste au neutre). Pour désactiver
-  tout le poignet : `wrist.enabled: false` (la trame série revient à 5 valeurs).
+  miroir. Avec la main gauche, le sens de l'inclinaison reste anatomique (« vers le pouce »).
+- Pour désactiver le poignet : `wrist.enabled: false` (la trame série revient à 5 valeurs).
 
 ## 6. Configuration (`config.yaml`)
 
@@ -150,9 +148,9 @@ pouce, index, majeur, annulaire, auriculaire.
 | `angles.return_alpha` | Vitesse du retour vers « main ouverte » quand la main disparaît |
 | `angles.min_angles` / `max_angles` | Angle servo à 0 % (doigt tendu) et à 100 % (doigt plié), par doigt |
 | `angles.invert` | `true` pour un servo monté à l'envers (inverse son sens) |
-| `wrist.enabled` | Active le poignet (trame série à 7 valeurs au lieu de 5) |
+| `wrist.enabled` | Active l'inclinaison du poignet (trame série à 6 valeurs au lieu de 5) |
 | `wrist.smoothing_alpha` | Lissage du poignet |
-| `wrist.rotation.*` / `wrist.deviation.*` | Pour chaque axe : `enabled`, `range_deg` (angle mesuré qui correspond à `min_angle` / `max_angle`), `min_angle`, `max_angle` (servo), `invert` |
+| `wrist.deviation.*` | `range_deg` (angle mesuré qui correspond à `min_angle` / `max_angle`), `min_angle`, `max_angle` (servo), `invert` |
 | `calibration.*` | Fichier de calibration et durées du compte à rebours et de la capture |
 | `sim.http_port` / `ws_port` | Ports du serveur web et du WebSocket |
 | `serial.port` / `baudrate` | Port COM de l'Arduino et vitesse (115200) |
@@ -170,7 +168,7 @@ servo**, c'est-à-dire aux valeurs envoyées à l'Arduino. La main 3D affiche to
 |---|---|
 | Microcontrôleur | **Arduino Uno** ou **Nano** (ou ESP32 avec la bibliothèque `ESP32Servo`) |
 | Servos doigts | 5 × **MG90S** (petite main, ~1 A en pointe chacun) ou **MG996R** (main grandeur nature type InMoov, ~2,5 A en pointe chacun) |
-| Servos poignet | 2 × **MG996R** (ou plus puissants) : 1 pour la rotation (engrenage dans l'avant-bras, comme InMoov), 1 pour l'inclinaison |
+| Servo poignet | 1 × **MG996R** (ou plus puissant) pour l'inclinaison |
 | Alimentation servos | **5–6 V séparée** : 5 A pour des MG90S, 10 A ou plus pour des MG996R ; ajoutez ~5 A pour le poignet (bloc secteur ou BEC) |
 | Main | Main imprimée en 3D à tendons, type **InMoov** (fils de pêche tirés par les servos) |
 | Optionnel | Carte **PCA9685** (16 voies PWM en I2C), condensateur 1000 µF sur l'alimentation des servos |
@@ -186,8 +184,7 @@ servo**, c'est-à-dire aux valeurs envoyées à l'Arduino. La main 3D affiche to
                         │  D6  ──────────────────────── signal servo MAJEUR
                         │  D9  ──────────────────────── signal servo ANNULAIRE
                         │  D10 ──────────────────────── signal servo AURICULAIRE
-                        │  D11 ──────────────────────── signal servo ROTATION poignet
-                        │  D12 ──────────────────────── signal servo INCLINAISON poignet
+                        │  D11 ──────────────────────── signal servo INCLINAISON poignet
                         │  GND ──────────┐       │
                         └────────────────│───────┘
                                          │  MASSE COMMUNE (obligatoire)
@@ -197,7 +194,7 @@ servo**, c'est-à-dire aux valeurs envoyées à l'Arduino. La main 3D affiche to
   └───────────────────────┘        └─ condensateur 1000 µF entre + et − (conseillé)
 ```
 
-Sans poignet, laissez D11 et D12 libres et mettez `wrist.enabled: false`.
+Sans poignet, laissez D11 libre et mettez `wrist.enabled: false`.
 
 > ⚠️ **N'alimentez jamais les servos par la broche 5V de l'Arduino.** Leurs pics de courant
 > font redémarrer la carte, voire l'endommagent. Utilisez une **alimentation séparée 5–6 V**
@@ -223,9 +220,9 @@ la fin du sketch.
      (commencez avec une plage réduite, par exemple 20–160°) ;
    - dans le sketch, `OPEN_ANGLES` doit valoir l'angle à 0 %, c'est-à-dire `min_angles`, ou
      `max_angles` si le doigt est inversé. C'est la position de repli en cas de timeout ;
-   - pour le poignet : `wrist.rotation` / `wrist.deviation` (`min_angle`, `max_angle`, `invert`).
-     Dans le sketch, les deux dernières valeurs de `OPEN_ANGLES` sont la position neutre (milieu
-     de la course, 90 par défaut), et `SAFE_MIN` / `SAFE_MAX` bornent la course mécanique.
+   - pour le poignet : `wrist.deviation` (`min_angle`, `max_angle`, `invert`). Dans le sketch, la
+     dernière valeur de `OPEN_ANGLES` est la position neutre (milieu de la course, 90 par défaut),
+     et `SAFE_MIN` / `SAFE_MAX` bornent la course mécanique.
 
 Le firmware **ignore les trames invalides**, **limite la vitesse** des servos (`MAX_SPEED_DEG_PER_S`)
 et **ouvre la main** s'il ne reçoit plus de trame pendant **1 s** (programme fermé, câble débranché…).
@@ -237,7 +234,7 @@ Format des trames, en ASCII à 115200 bauds, avec des angles entiers de 0 à 180
 | Poignet | Trame | Exemple |
 |---|---|---|
 | désactivé | `$pouce,index,majeur,annulaire,auriculaire\n` | `$0,90,90,180,45` |
-| activé | `$pouce,index,majeur,annulaire,auriculaire,rotation,inclinaison\n` | `$0,90,90,180,45,120,80` |
+| activé | `$pouce,index,majeur,annulaire,auriculaire,inclinaison\n` | `$0,90,90,180,45,80` |
 
 Le firmware accepte les deux formats. Avec une trame à 5 valeurs, le poignet reste en position neutre.
 Au démarrage, `main.py` affiche le nombre de valeurs envoyées.
@@ -314,14 +311,9 @@ Internet.
 ### Calcul du poignet (`src/wrist_angles.py`)
 - Un **repère de la main** est construit avec le poignet (0), la base de l'index (5), celle du
   majeur (9) et celle de l'auriculaire (17) : axe long, direction du pouce et normale de la paume.
-  Le sens de la normale dépend de la main (gauche ou droite), donnée par MediaPipe et filtrée pour
-  ne pas basculer d'une image à l'autre.
-- **Rotation** : angle de la normale de la paume autour de l'avant-bras, c'est-à-dire de l'axe long
-  de la pose neutre.
-- **Inclinaison** : angle de l'axe long de la main dans le plan de la paume, par rapport à la pose
-  neutre.
-- Les deux angles sont indépendants : une inclinaison ne fausse pas la rotation, et inversement.
-  C'est vérifié par les tests.
+- **Inclinaison** : angle de l'axe long de la main dans le plan de la paume, par rapport à l'axe
+  long de la pose neutre. Une rotation de la main sur elle-même ne la fausse pas (vérifié par les
+  tests).
 
 ### Arborescence
 ```
@@ -331,7 +323,7 @@ robot-hand-sim/
 ├── src/
 │   ├── tracker.py           # webcam + MediaPipe HandLandmarker (API Tasks), dessin du squelette
 │   ├── finger_angles.py     # landmarks → flexion → % → angle servo
-│   ├── wrist_angles.py      # landmarks → rotation / inclinaison du poignet
+│   ├── wrist_angles.py      # landmarks → inclinaison du poignet
 │   ├── calibration.py       # procédure « main ouverte / poing fermé » + JSON
 │   ├── smoothing.py         # moyenne mobile exponentielle
 │   └── backends/

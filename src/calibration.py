@@ -22,7 +22,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.finger_angles import DEFAULT_CLOSED_RAW, DEFAULT_OPEN_RAW, FINGER_NAMES, NUM_FINGERS
-from src.wrist_angles import DEFAULT_NEUTRAL_LONG, DEFAULT_NEUTRAL_NORMAL
+from src.wrist_angles import DEFAULT_NEUTRAL_LONG
 
 FloatArray = NDArray[np.float64]
 log = logging.getLogger(__name__)
@@ -34,13 +34,12 @@ MIN_RANGE_DEG = 20.0
 @dataclass
 class Calibration:
     """Bornes brutes (degrés) par doigt (ordre pouce → auriculaire) et pose
-    neutre du poignet (axe long et normale de la paume, vecteurs unitaires)."""
+    neutre du poignet (axe long de la main, vecteur unitaire)."""
 
     open_raw: FloatArray = field(default_factory=lambda: DEFAULT_OPEN_RAW.copy())
     closed_raw: FloatArray = field(default_factory=lambda: DEFAULT_CLOSED_RAW.copy())
     is_default: bool = True
     wrist_long: FloatArray = field(default_factory=lambda: DEFAULT_NEUTRAL_LONG.copy())
-    wrist_normal: FloatArray = field(default_factory=lambda: DEFAULT_NEUTRAL_NORMAL.copy())
 
     @classmethod
     def load(cls, path: Path) -> "Calibration":
@@ -57,16 +56,14 @@ class Calibration:
             # Pose neutre du poignet : optionnelle (anciens fichiers sans poignet).
             wrist = data.get("wrist_neutral")
             if wrist is not None:
-                wrist_long, wrist_normal = _orthonormalize(
-                    np.array(wrist["long"], dtype=np.float64), np.array(wrist["normal"], dtype=np.float64)
-                )
+                wrist_long = _normalize(np.array(wrist["long"], dtype=np.float64))
             else:
-                wrist_long, wrist_normal = DEFAULT_NEUTRAL_LONG.copy(), DEFAULT_NEUTRAL_NORMAL.copy()
+                wrist_long = DEFAULT_NEUTRAL_LONG.copy()
         except (OSError, ValueError, KeyError, TypeError) as exc:
             log.warning("Calibration illisible (%s) : %s. Valeurs par défaut utilisées.", path, exc)
             return cls()
         log.info("Calibration chargée depuis %s", path)
-        return cls(open_raw, closed_raw, False, wrist_long, wrist_normal)
+        return cls(open_raw, closed_raw, False, wrist_long)
 
     def save(self, path: Path) -> None:
         """Sauvegarde la calibration en JSON lisible."""
@@ -74,27 +71,21 @@ class Calibration:
             "fingers": list(FINGER_NAMES),
             "open_raw": [round(float(v), 2) for v in self.open_raw],
             "closed_raw": [round(float(v), 2) for v in self.closed_raw],
-            "wrist_neutral": {
-                "long": [round(float(v), 4) for v in self.wrist_long],
-                "normal": [round(float(v), 4) for v in self.wrist_normal],
-            },
+            "wrist_neutral": {"long": [round(float(v), 4) for v in self.wrist_long]},
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         log.info("Calibration sauvegardée dans %s", path)
 
 
-def _orthonormalize(long: FloatArray, normal: FloatArray) -> tuple[FloatArray, FloatArray]:
-    """Rend les deux vecteurs unitaires et perpendiculaires (normale corrigée)."""
-    nl = float(np.linalg.norm(long))
-    if nl < 1e-9:
+def _normalize(v: FloatArray) -> FloatArray:
+    """Vecteur 3D rendu unitaire."""
+    if v.shape != (3,):
+        raise ValueError("vecteur 3D attendu")
+    n = float(np.linalg.norm(v))
+    if n < 1e-9:
         raise ValueError("axe long nul")
-    long = long / nl
-    normal = normal - float(np.dot(normal, long)) * long
-    nn = float(np.linalg.norm(normal))
-    if nn < 1e-9:
-        raise ValueError("normale nulle")
-    return long, normal / nn
+    return v / n
 
 
 class _Step(Enum):
@@ -119,7 +110,7 @@ class CalibrationProcedure:
         self._samples: list[FloatArray] = []
         self._wrist_samples: list[FloatArray] = []
         self._open_raw: FloatArray | None = None
-        self._wrist_neutral: tuple[FloatArray, FloatArray] | None = None
+        self._wrist_neutral: FloatArray | None = None
         self.message = ""  # Texte à afficher à l'écran
 
     @property
@@ -144,12 +135,12 @@ class CalibrationProcedure:
         self,
         now: float,
         raw: FloatArray | None,
-        wrist: tuple[FloatArray, FloatArray] | None = None,
+        wrist: FloatArray | None = None,
     ) -> Calibration | None:
         """Fait avancer la procédure. Renvoie la calibration quand elle est terminée.
 
-        `raw` : flexions brutes des doigts ; `wrist` : (axe long, normale) de la
-        main, enregistrés comme pose neutre du poignet pendant « main ouverte ».
+        `raw` : flexions brutes des doigts ; `wrist` : axe long de la main,
+        enregistré comme pose neutre du poignet pendant « main ouverte ».
         """
         elapsed = now - self._step_start
         step = self._step
@@ -168,7 +159,7 @@ class CalibrationProcedure:
             if raw is not None:
                 self._samples.append(np.asarray(raw, dtype=np.float64))
             if wrist is not None and step is _Step.CAPTURE_OPEN:
-                self._wrist_samples.append(np.concatenate(wrist).astype(np.float64))
+                self._wrist_samples.append(np.asarray(wrist, dtype=np.float64))
             if elapsed >= self.capture_s:
                 return self._finish_capture(now, step)
         return None
@@ -185,9 +176,8 @@ class CalibrationProcedure:
             self._open_raw = median
             self._wrist_neutral = None
             if self._wrist_samples:
-                w = np.median(np.stack(self._wrist_samples), axis=0)
                 try:
-                    self._wrist_neutral = _orthonormalize(w[:3], w[3:])
+                    self._wrist_neutral = _normalize(np.median(np.stack(self._wrist_samples), axis=0))
                 except ValueError:
                     pass
             self._goto(_Step.COUNTDOWN_CLOSED, now)
@@ -204,5 +194,5 @@ class CalibrationProcedure:
         self.message = "Calibration enregistree !"
         calib = Calibration(self._open_raw, median, is_default=False)
         if self._wrist_neutral is not None:
-            calib.wrist_long, calib.wrist_normal = self._wrist_neutral
+            calib.wrist_long = self._wrist_neutral
         return calib

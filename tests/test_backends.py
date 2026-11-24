@@ -16,9 +16,9 @@ def test_format_trame_bornee_et_arrondie() -> None:
 
 
 def test_trame_avec_poignet() -> None:
-    state = HandState((0.0,) * 5, (10, 20, 30, 40, 50), True, (12.0, -5.0), (100, 80))
-    assert state.servo_frame == (10, 20, 30, 40, 50, 100, 80)
-    assert format_frame(state.servo_frame) == b"$10,20,30,40,50,100,80\n"
+    state = HandState((0.0,) * 5, (10, 20, 30, 40, 50), True, -5.0, (80,))
+    assert state.servo_frame == (10, 20, 30, 40, 50, 80)
+    assert format_frame(state.servo_frame) == b"$10,20,30,40,50,80\n"
     assert HandState((0.0,) * 5, (1, 2, 3, 4, 5), True).servo_frame == (1, 2, 3, 4, 5)
 
 

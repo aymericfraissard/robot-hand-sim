@@ -46,12 +46,8 @@ class SimBackend(Backend):
         http_port: int = 8000,
         ws_port: int = 8765,
         open_browser: bool = True,
-        wrist_ranges: list[list[float]] | None = None,
     ) -> None:
         self.web_dir = web_dir
-        # Plages (degrés) de rotation et d'inclinaison du poignet, pour les jauges
-        # de la page ; None = poignet désactivé.
-        self.wrist_ranges = wrist_ranges
         self.host = host
         self.http_port = http_port
         self.ws_port = ws_port
@@ -137,11 +133,8 @@ class SimBackend(Backend):
                 "flex": [round(p * 1.8, 1) for p in state.percents],
                 "percent": [round(p, 1) for p in state.percents],
                 "servo": list(state.finger_servos),
-                # Poignet : angles logiques (degrés, 0 = neutre), servos et plages ;
-                # wrist_servo vaut null si le poignet est désactivé.
-                "wrist": [round(a, 1) for a in state.wrist_degrees],
-                "wrist_servo": list(state.wrist_servos) or None,
-                "wrist_range": self.wrist_ranges,
+                # Poignet : inclinaison logique (degrés, 0 = neutre, + = vers le pouce).
+                "deviation": round(state.wrist_deviation, 1),
                 "hand": state.hand_detected,
             }
         )

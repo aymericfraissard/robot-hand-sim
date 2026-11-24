@@ -61,7 +61,7 @@ def test_sauvegarde_et_rechargement(tmp_path: Path) -> None:
 
 
 def test_pose_neutre_poignet_capturee_et_sauvegardee(tmp_path: Path) -> None:
-    long, normal = np.array([0.0, -0.8, -0.6]), np.array([0.0, 0.6, -0.8])
+    long = np.array([0.0, -0.8, -0.6])
     open_raw, closed_raw = raw_flexions(make_hand(0.0)), raw_flexions(make_hand(1.0))
     proc = CalibrationProcedure(countdown_s=1.0, capture_s=0.5)
     proc.toggle(0.0)
@@ -69,13 +69,25 @@ def test_pose_neutre_poignet_capturee_et_sauvegardee(tmp_path: Path) -> None:
     while t < 20.0 and calib is None:
         t += 1 / 30
         raw = open_raw if t < 1.5 else closed_raw
-        calib = proc.update(t, raw, (long, normal))
+        calib = proc.update(t, raw, long)
     assert calib is not None
     np.testing.assert_allclose(calib.wrist_long, long, atol=1e-9)
-    np.testing.assert_allclose(calib.wrist_normal, normal, atol=1e-9)
     path = tmp_path / "c.json"
     calib.save(path)
-    np.testing.assert_allclose(Calibration.load(path).wrist_normal, normal, atol=1e-4)
+    np.testing.assert_allclose(Calibration.load(path).wrist_long, long, atol=1e-4)
+
+
+def test_fichier_avec_ancienne_normale_du_poignet(tmp_path: Path) -> None:
+    """Les fichiers de l'ancienne version (avec la normale, pour la rotation) restent lisibles."""
+    path = tmp_path / "v2.json"
+    path.write_text(
+        '{"open_raw": [1,2,3,4,5], "closed_raw": [101,102,103,104,105],'
+        ' "wrist_neutral": {"long": [0, -2, 0], "normal": [0, 0, -1]}}',
+        encoding="utf-8",
+    )
+    calib = Calibration.load(path)
+    assert not calib.is_default
+    np.testing.assert_allclose(calib.wrist_long, [0.0, -1.0, 0.0])
 
 
 def test_ancien_fichier_sans_poignet(tmp_path: Path) -> None:
